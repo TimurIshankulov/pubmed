@@ -1,6 +1,7 @@
 # Output folder
 output/
-fulltexts/
+pubmed/
+pmc/
 database/
 
 # Byte-compiled / optimized / DLL files
