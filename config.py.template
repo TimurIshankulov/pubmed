@@ -1,0 +1,3 @@
+api_key     = 'your_api_key'
+max_results = 5000
+retmode     = 'xml'
