@@ -1,12 +1,15 @@
 import datetime
-import time
-import os
 import json
+import os
+import time
+import xml.etree.ElementTree as ET
+
 import requests
 from IPython.display import clear_output
-import xml.etree.ElementTree as ET
-import pandas as pd
+
 import numpy as np
+import pandas as pd
+from tqdm import notebook as tqdm
 from config import api_key, max_results, retmode
 
 headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) ' + \
@@ -443,8 +446,6 @@ def handle_query_responses(db, article_ids):
     """Returns articles DataFrame"""
     items_list = []
     filenames = [os.path.join(db, str(article_id)) for article_id in article_ids]
-    print('{0} query responses found. Starting...'.format(len(filenames)))
-    time.sleep(1)
     
     if db == 'pmc':
         items = pd.DataFrame(columns=['pmid', 'pmc', 'publisher-id', 'doi', 'abstract_len', 'full_text_len', 'file_size',
@@ -460,12 +461,12 @@ def handle_query_responses(db, article_ids):
                                       'publisher_name', 'publisher_location', 'publisher_nlm_id', 'publisher_issn_linking',
                                       'abstract_len', 'abstract', 'copyright',
                                       'mesh_quals_major', 'mesh_quals_minor', 'mesh_descriptors', 'keywords', 'file_size'])
-    for i in range(0, len(filenames)):
-        clear_output(wait=True)
+    for i in tqdm.tqdm(range(len(filenames))):
+        #clear_output(wait=True)
         
         #if filenames[i] in files_stoplist:
         #    continue
-        print('Done {0} of {1}. Working on {2}'.format(i+1, len(filenames), filenames[i]))
+        #print('Done {0} of {1}. Working on {2}'.format(i+1, len(filenames), filenames[i]))
         
         root = get_element_tree(filenames[i])
         if db == 'pmc':
@@ -479,8 +480,6 @@ def handle_query_responses(db, article_ids):
             items.to_csv('database/tmp.csv', sep='|', index=False)
     
     items = items.append(items_list)
-    clear_output(wait=True)
-    print('Work completed. Done {0} of {0}.'.format(len(filenames)))
         
     return items
 
@@ -549,8 +548,8 @@ def download_all_query_responses(query, db, refresh=False):
     print('{0} articles are already stored in the database.'.format(len(intersection)))
     print('{0} articles will be downloaded.'.format(len(article_ids) - len(intersection)))
     
-    for article_id in article_ids:
-        download_query_response(article_id, db, refresh)
+    for i in tqdm.tqdm(range(len(article_ids))):
+        download_query_response(article_ids[i], db, refresh)
     
     files_count = len(os.listdir(db))
     print('Total {0} articles stored in the database.'.format(files_count))
