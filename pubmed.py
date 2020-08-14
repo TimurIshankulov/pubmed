@@ -56,15 +56,29 @@ def parse_authors(subroot, path):
     contributors = subroot.findall(path)
     if contributors is not None:
         for contributor in contributors:
+            fullname = ''
+            affiliation_links = ''
             for contributor_meta in contributor.iter('name'):
                 surname = contributor_meta.find('surname')
                 given_name = contributor_meta.find('given-names')
                 if (surname is not None) and (given_name is not None):
                     surname = surname.text if surname.text is not None else ''
                     given_name = given_name.text if given_name.text is not None else ''
-                    authors.append(' '.join([given_name, surname]))
+                    fullname = ' '.join([given_name, surname])
+            affiliations = contributor.findall('xref')  # Affiliation links
+            if affiliations is not None:
+                affiliation_list = []
+                for affiliation in affiliations:
+                    if affiliation is not None:
+                        affiliation_list.append(extract_text(affiliation, ''))
+                if affiliation_list:
+                    affiliation_links = ' (' + ','.join(affiliation_list) + ')'
+            if fullname:
+                if affiliation_links:
+                    fullname += affiliation_links
+                authors.append(fullname)
     if len(authors) > 0:
-        authors = ', '.join(authors)
+        authors = '; '.join(authors)
         authors = ' '.join(authors.split())
     if authors:
         return authors
@@ -73,12 +87,28 @@ def parse_authors(subroot, path):
 
 def parse_affiliations(subroot, path):
     """Returns parsed affiliations string from given ET <subroot>"""
-    affiliation_list = []
-    affiliations = subroot.findall(path)
-    if affiliations is not None:
+
+    def get_affiliation_list(affiliations):
+        """Returns affiliation list of present affiliations"""
+        affiliation_list = []
         for affiliation in affiliations:
             if affiliation is not None:
-                affiliation_list.append(extract_text(affiliation, ''))
+                label = ''
+                for element in affiliation.iter():
+                    if (element.tag == 'label') or (element.tag == 'sup'):
+                        label = '(' + element.text + ')'
+                        element.text = ''
+                affiliation_string = extract_text(affiliation, '')
+                if label:
+                    affiliation_string = label + ' ' + affiliation_string
+                affiliation_list.append(affiliation_string)
+        return affiliation_list
+
+    affiliations = subroot.findall(path)  # Find affiliations in author's location
+    if not affiliations:
+        affiliations = subroot.findall('aff')  # Find affiliations in meta section
+    affiliation_list = get_affiliation_list(affiliations)
+
     if affiliation_list:
         affiliations_string = ' // '.join(affiliation_list)
         return affiliations_string
