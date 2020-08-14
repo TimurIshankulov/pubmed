@@ -54,20 +54,35 @@ def parse_authors(subroot, path):
     """Returns parsed authors string from given ET <subroot>"""
     authors = []
     contributors = subroot.findall(path)
-    for contributor in contributors:
-        for contributor_meta in contributor.iter('name'):
-            surname = contributor_meta.find('surname')
-            given_name = contributor_meta.find('given-names')
-            if (surname is not None) and (given_name is not None):
-                surname = surname.text if surname.text is not None else ''
-                given_name = given_name.text if given_name.text is not None else ''
-                authors.append(' '.join([given_name, surname]))
+    if contributors is not None:
+        for contributor in contributors:
+            for contributor_meta in contributor.iter('name'):
+                surname = contributor_meta.find('surname')
+                given_name = contributor_meta.find('given-names')
+                if (surname is not None) and (given_name is not None):
+                    surname = surname.text if surname.text is not None else ''
+                    given_name = given_name.text if given_name.text is not None else ''
+                    authors.append(' '.join([given_name, surname]))
     if len(authors) > 0:
         authors = ', '.join(authors)
         authors = ' '.join(authors.split())
     if authors:
         return authors
     return np.NaN
+
+
+def parse_affiliations(subroot, path):
+    """Returns parsed affiliations string from given ET <subroot>"""
+    affiliation_list = []
+    affiliations = subroot.findall(path)
+    if affiliations is not None:
+        for affiliation in affiliations:
+            if affiliation is not None:
+                affiliation_list.append(extract_text(affiliation, ''))
+    if affiliation_list:
+        affiliations_string = ' // '.join(affiliation_list)
+        return affiliations_string
+    return ''
 
 
 def parse_keywords(subroot):
@@ -175,6 +190,7 @@ def parse_element_tree_pmc(root):
             
         item['title'] = extract_text(meta, 'title-group/article-title')                         # Article title
         item['authors'] = parse_authors(meta, 'contrib-group/contrib')                          # Authors
+        item['affiliations'] = parse_affiliations(meta, 'contrib-group/aff')                    # Affiliations
         item['pub_date'] = parse_pub_date(meta, 'epub')                                         # Publication date
     
         copyright = meta.find('permissions/copyright-statement')                                # Copyright statement
@@ -265,21 +281,33 @@ def parse_authors_pubmed(subroot):
     """Returns parsed dict with authors found in given ET <subroot>"""
     authors_dict = {}
     authors_list = []
+    affiliations_list = []
     
     authors = subroot.findall('AuthorList/Author')                                              # Authors
     if authors is not None:
         for author in authors:
             fullname = ''
-            lastname = author.find('LastName')
+            lastname = author.find('LastName')                                                  # Last name
             if (lastname is not None) and (lastname.text is not None):
                 fullname += lastname.text
-                forename = author.find('ForeName')
+                forename = author.find('ForeName')                                              # First name
                 if (forename is not None) and (forename.text is not None):
                     fullname += ' ' + forename.text
             if fullname:
                 authors_list.append(fullname)
+
+            affiliation = author.find('AffiliationInfo/Affiliation')                            # Affiliation
+            if affiliation is not None:
+                affiliation_text = extract_text(affiliation, '')
+                if affiliation_text == '':
+                    affiliation_text = 'Not defined'
+            else:
+                affiliation_text = 'Not defined'
+            affiliations_list.append(affiliation_text)
     if authors_list:
-        authors_dict['authors'] = '; '.join(authors_list)
+        authors_dict['authors'] = ' // '.join(authors_list)
+    if affiliations_list:
+        authors_dict['affiliations'] = ' // '.join(affiliations_list)
     
     return authors_dict
 
@@ -449,13 +477,13 @@ def handle_query_responses(db, article_ids):
     
     if db == 'pmc':
         items = pd.DataFrame(columns=['pmid', 'pmc', 'publisher-id', 'doi', 'abstract_len', 'full_text_len', 'file_size',
-                                      'title', 'article-type', 'category', 'authors', 'pub_date', 'keywords',
+                                      'title', 'article-type', 'category', 'authors', 'affiliations', 'pub_date',
                                       'volume', 'elocation-id', 'issue', 'pages', 'issn_epub', 'issn_ppub',
                                       'journal-id_nlm-ta', 'journal_title', 'publisher_name', 'publisher_loc',
-                                      'copyright', 'license-type', 'license', 'abstract', 'full_text'])
+                                      'copyright', 'license-type', 'license', 'abstract', 'full_text', 'keywords'])
     elif db == 'pubmed':
         items = pd.DataFrame(columns=['pmid', 'pmc', 'pii', 'mid', 'doi', 'elocation_id', 'language',
-                                      'title', 'authors', 'article_type', 'publication_type',
+                                      'title', 'authors', 'affiliations', 'article_type', 'publication_type',
                                       'journal_title', 'volume', 'issue', 'pages', 'pub_date',
                                       'issn_electronic', 'issn_print', 'journal_iso_abbr',
                                       'publisher_name', 'publisher_location', 'publisher_nlm_id', 'publisher_issn_linking',
