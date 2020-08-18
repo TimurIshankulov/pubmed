@@ -4,3 +4,4 @@ pandas
 tqdm
 SQLAlchemy
 mysqlclient
+alembic
