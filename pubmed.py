@@ -335,7 +335,7 @@ def parse_authors_pubmed(subroot):
                 affiliation_text = 'Not defined'
             affiliations_list.append(affiliation_text)
     if authors_list:
-        authors_dict['authors'] = ' // '.join(authors_list)
+        authors_dict['authors'] = '; '.join(authors_list)
     if affiliations_list:
         authors_dict['affiliations'] = ' // '.join(affiliations_list)
     
