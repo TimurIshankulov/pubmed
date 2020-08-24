@@ -9,9 +9,9 @@ parent_dir = os.path.dirname(current_dir)
 sys.path.append(parent_dir)
 from config import conn_string_pubmed
 
-Base = declarative_base()
+BasePubmed = declarative_base()
 
-class PubmedArticle(Base):
+class PubmedArticle(BasePubmed):
 
     def __init__(self, values):
         self.pmid               = values.get('pmid')
@@ -121,8 +121,7 @@ class PubmedArticle(Base):
     mesh_quals_minor   = Column(Text())
     mesh_descriptors   = Column(Text())
     keywords           = Column(Text())
-    file_size          = Column(Integer())
 
 
 engine = create_engine(conn_string_pubmed)
-Base.metadata.create_all(engine)
+BasePubmed.metadata.create_all(engine)
