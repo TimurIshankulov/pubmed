@@ -529,7 +529,7 @@ def handle_query_responses(db, article_ids):
     filenames = [os.path.join(db, str(article_id)) for article_id in article_ids]
     
     if db == 'pmc':
-        items = pd.DataFrame(columns=['pmid', 'pmc', 'publisher-id', 'doi', 'abstract_len', 'full_text_len', 'file_size',
+        items = pd.DataFrame(columns=['pmid', 'pmc', 'publisher-id', 'doi', 'abstract_len', 'full_text_len',
                                       'title', 'article-type', 'category', 'authors', 'affiliations', 'pub_date',
                                       'volume', 'elocation-id', 'issue', 'pages', 'issn_epub', 'issn_ppub',
                                       'journal-id_nlm-ta', 'journal_title', 'publisher_name', 'publisher_loc',
@@ -541,7 +541,7 @@ def handle_query_responses(db, article_ids):
                                       'issn_electronic', 'issn_print', 'journal_iso_abbr',
                                       'publisher_name', 'publisher_location', 'publisher_nlm_id', 'publisher_issn_linking',
                                       'abstract_len', 'abstract', 'copyright',
-                                      'mesh_quals_major', 'mesh_quals_minor', 'mesh_descriptors', 'keywords', 'file_size'])
+                                      'mesh_quals_major', 'mesh_quals_minor', 'mesh_descriptors', 'keywords'])
     for i in tqdm.tqdm(range(len(filenames))):
         #clear_output(wait=True)
         
@@ -554,7 +554,7 @@ def handle_query_responses(db, article_ids):
             item = parse_element_tree_pmc(root)
         elif db == 'pubmed':
             item = parse_element_tree_pubmed(root)
-        item['file_size'] = os.path.getsize(filenames[i])
+        #item['file_size'] = os.path.getsize(filenames[i])
         items_list.append(item)
         #items = items.append(item, ignore_index=True)
         if i % 5000 == 0:
@@ -609,6 +609,7 @@ def save_to_database(item, session):
     finally:
         session.close()
 
+
 def download_query_response(article_id, db, refresh=False):
     """Saves article query response with <article_id> identifier to file"""
     params = {
@@ -645,11 +646,11 @@ def download_article(article_id, db, session, refresh=False, cache=False):
     if (result is None) or (refresh):  # If not present in the database
         filename = os.path.join(db, str(article_id))
         if (os.path.exists(filename)) and (not refresh):  # If file exists, then read it first
-            print('Getting from file: {0}'.format(article_id))
+            # print('Getting from file: {0}'.format(article_id))
             with open(filename, 'r', encoding='utf-8') as f:
                 data = f.read() 
         else:                                             # Else send request to pubmed
-            print('Downloading from Pubmed: {0}'.format(article_id))
+            # print('Downloading from Pubmed: {0}'.format(article_id))
             try:
                 response = requests.get(url=url_fetch, headers=headers, params=params)
             except requests.RequestException:
