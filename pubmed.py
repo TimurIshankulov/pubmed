@@ -34,12 +34,26 @@ url_pubmed_to_pmc = 'https://eutils.ncbi.nlm.nih.gov/entrez/eutils/elink.fcgi'
 url_fetch         = 'https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi'
 url_search        = 'https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi'
 
+columns = {'pubmed': ['pmid', 'pmc', 'pii', 'mid', 'doi', 'elocation_id', 'language',
+                      'title', 'authors', 'affiliations', 'article_type', 'publication_type',
+                      'journal_title', 'volume', 'issue', 'pages', 'pub_date',
+                      'issn_electronic', 'issn_print', 'journal_iso_abbr',
+                      'publisher_name', 'publisher_location', 'publisher_nlm_id', 'publisher_issn_linking',
+                      'abstract_len', 'abstract', 'copyright',
+                      'mesh_quals_major', 'mesh_quals_minor', 'mesh_descriptors', 'keywords'],
+           'pmc': ['pmid', 'pmc', 'publisher-id', 'doi', 'abstract_len', 'full_text_len',
+                   'title', 'article-type', 'category', 'authors', 'affiliations', 'pub_date',
+                   'volume', 'elocation-id', 'issue', 'pages', 'issn_epub', 'issn_ppub',
+                   'journal-id_nlm-ta', 'journal_title', 'publisher_name', 'publisher_loc',
+                   'copyright', 'license-type', 'license', 'abstract', 'full_text', 'keywords']
+}
+
 engine_pubmed = create_engine(conn_string_pubmed)
 BasePubmed.metadata.bind = engine_pubmed
 DBSession_pubmed = sessionmaker(bind=engine_pubmed)
 session_pubmed = DBSession_pubmed()
 
-sessions_dict = {'pubmed': session_pubmed}
+sessions = {'pubmed': session_pubmed}
 
 def parse_pub_date(subroot, pub_type):
     """Returns parsed publication date from given ET <subroot>"""
@@ -524,44 +538,42 @@ def get_parsed_item(data, db):
 
 
 def handle_query_responses(db, article_ids):
-    """Returns articles DataFrame"""
+    """Returns articles DataFrame generated from files"""
     items_list = []
     filenames = [os.path.join(db, str(article_id)) for article_id in article_ids]
+    items = pd.DataFrame(columns=columns[db])
     
-    if db == 'pmc':
-        items = pd.DataFrame(columns=['pmid', 'pmc', 'publisher-id', 'doi', 'abstract_len', 'full_text_len',
-                                      'title', 'article-type', 'category', 'authors', 'affiliations', 'pub_date',
-                                      'volume', 'elocation-id', 'issue', 'pages', 'issn_epub', 'issn_ppub',
-                                      'journal-id_nlm-ta', 'journal_title', 'publisher_name', 'publisher_loc',
-                                      'copyright', 'license-type', 'license', 'abstract', 'full_text', 'keywords'])
-    elif db == 'pubmed':
-        items = pd.DataFrame(columns=['pmid', 'pmc', 'pii', 'mid', 'doi', 'elocation_id', 'language',
-                                      'title', 'authors', 'affiliations', 'article_type', 'publication_type',
-                                      'journal_title', 'volume', 'issue', 'pages', 'pub_date',
-                                      'issn_electronic', 'issn_print', 'journal_iso_abbr',
-                                      'publisher_name', 'publisher_location', 'publisher_nlm_id', 'publisher_issn_linking',
-                                      'abstract_len', 'abstract', 'copyright',
-                                      'mesh_quals_major', 'mesh_quals_minor', 'mesh_descriptors', 'keywords'])
     for i in tqdm.tqdm(range(len(filenames))):
-        #clear_output(wait=True)
-        
-        #if filenames[i] in files_stoplist:
-        #    continue
-        #print('Done {0} of {1}. Working on {2}'.format(i+1, len(filenames), filenames[i]))
-        
         root = get_element_tree(filenames[i])
         if db == 'pmc':
             item = parse_element_tree_pmc(root)
         elif db == 'pubmed':
             item = parse_element_tree_pubmed(root)
-        #item['file_size'] = os.path.getsize(filenames[i])
+        item['file_size'] = os.path.getsize(filenames[i])
         items_list.append(item)
-        #items = items.append(item, ignore_index=True)
         if i % 5000 == 0:
             items.to_csv('database/tmp.csv', sep='|', index=False)
-    
+
     items = items.append(items_list)
-        
+    return items
+
+
+def generate_dataset(db, article_ids):
+    """Returns articles DataFrame generated from MySQL database"""
+    items_list = []
+    items = pd.DataFrame(columns=columns[db])
+    session = sessions[db]
+
+    for i in tqdm.tqdm(range(len(article_ids))):
+        result = session.query(PubmedArticle).filter_by(pmid=article_ids[i]).first()
+        if result is not None:
+            items_list.append(result.to_dict())
+        else:
+            continue
+        if i % 5000 == 0:  # Just cache intermediate result
+            items.to_csv('database/tmp.csv', sep='|', index=False)
+
+    items = items.append(items_list)
     return items
 
 
@@ -678,7 +690,7 @@ def download_all_articles(query, db, refresh=False, cache=False):
     #print('{0} articles are already stored in the database.'.format(len(intersection)))
     #print('{0} articles will be downloaded.'.format(len(article_ids) - len(intersection)))
     
-    session = sessions_dict[db]
+    session = sessions[db]
     for i in tqdm.tqdm(range(len(article_ids))):
         download_article(article_ids[i], db, session, refresh, cache)
     
