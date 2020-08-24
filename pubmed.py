@@ -1,16 +1,22 @@
 import datetime
 import json
 import os
+import sys
 import time
 import xml.etree.ElementTree as ET
 
-import requests
-from IPython.display import clear_output
-
+import MySQLdb
 import numpy as np
 import pandas as pd
+import requests
+from IPython.display import clear_output
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
 from tqdm import notebook as tqdm
+
 from config import api_key, max_results, retmode
+from config import conn_string_pubmed
+from models.pubmed_model import BasePubmed, PubmedArticle
 
 headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) ' + \
                          'Chrome/84.0.4147.105 Safari/537.36'
@@ -28,6 +34,12 @@ url_pubmed_to_pmc = 'https://eutils.ncbi.nlm.nih.gov/entrez/eutils/elink.fcgi'
 url_fetch         = 'https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi'
 url_search        = 'https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi'
 
+engine_pubmed = create_engine(conn_string_pubmed)
+BasePubmed.metadata.bind = engine_pubmed
+DBSession_pubmed = sessionmaker(bind=engine_pubmed)
+session_pubmed = DBSession_pubmed()
+
+sessions_dict = {'pubmed': session_pubmed}
 
 def parse_pub_date(subroot, pub_type):
     """Returns parsed publication date from given ET <subroot>"""
@@ -500,6 +512,17 @@ def get_element_tree(filename):
     return root
 
 
+def get_parsed_item(data, db):
+    """Returns parsed article dict"""
+    
+    root = ET.fromstring(data)
+    if db == 'pmc':
+        item = parse_element_tree_pmc(root)
+    elif db == 'pubmed':
+        item = parse_element_tree_pubmed(root)
+    return item
+
+
 def handle_query_responses(db, article_ids):
     """Returns articles DataFrame"""
     items_list = []
@@ -571,6 +594,21 @@ def get_article_ids(query, db):
     return article_ids
 
 
+def save_to_database(item, session):
+    """Sends MySQL query and saves <item> to database"""
+    try:
+        article = PubmedArticle(item)
+        session.add(article) 
+        session.commit()
+    except MySQLdb._exceptions.IntegrityError:
+        print('Integrity error, article id: {0}. Error info:\n'.format(article.pmid), sys.exc_info()[1])
+        session.rollback()
+    except Exception:
+        print('MySQL error, article id: {0}. Error info:\n'.format(article.pmid), sys.exc_info()[1])
+        session.rollback()
+    finally:
+        session.close()
+
 def download_query_response(article_id, db, refresh=False):
     """Saves article query response with <article_id> identifier to file"""
     params = {
@@ -587,28 +625,62 @@ def download_query_response(article_id, db, refresh=False):
         try:
             response = requests.get(url=url_fetch, headers=headers, params=params)
         except requests.RequestException:
-            print('Problem has occured with PMC ID: {0}'.format(article_id))
+            print('Problem has occured with {0} ID: {1}'.format(db, article_id))
         else:
             data = response.text
             with open(filename, 'w+', encoding='utf-8') as f:
                 f.write(data)
 
 
-def download_all_query_responses(query, db, refresh=False):
+def download_article(article_id, db, session, refresh=False, cache=False):
+    """Saves article query response with <article_id> identifier to file"""
+    params = {
+        'db'      : db,
+        'id'      : article_id,
+        'api_key' : api_key,
+        'retmode' : retmode
+    }
+
+    result = session.query(PubmedArticle).filter_by(pmid=article_id).first()
+    if (result is None) or (refresh):  # If not present in the database
+        filename = os.path.join(db, str(article_id))
+        if (os.path.exists(filename)) and (not refresh):  # If file exists, then read it first
+            print('Getting from file: {0}'.format(article_id))
+            with open(filename, 'r', encoding='utf-8') as f:
+                data = f.read() 
+        else:                                             # Else send request to pubmed
+            print('Downloading from Pubmed: {0}'.format(article_id))
+            try:
+                response = requests.get(url=url_fetch, headers=headers, params=params)
+            except requests.RequestException:
+                print('Problem has occured with {0} ID: {1}'.format(db, article_id))
+            else:
+                data = response.text
+            if cache:
+                with open(filename, 'w+', encoding='utf-8') as f:
+                    f.write(data)
+        item = get_parsed_item(data, db)
+        save_to_database(item, session)
+    else:  # Article is already in the database
+        pass
+
+
+def download_all_articles(query, db, refresh=False, cache=False):
     """Downloads all query responses got by <query>"""
     article_ids = get_article_ids(query, db)
     
     article_ids = [str(article_id) for article_id in article_ids]
-    files_list = os.listdir(db)
-    intersection = list(set(article_ids) & set(files_list))
+    #files_list = os.listdir(db)
+    #intersection = list(set(article_ids) & set(files_list))
     
     print('{0} articles found in {1} with query specified.'.format(len(article_ids), db))
-    print('{0} articles are already stored in the database.'.format(len(intersection)))
-    print('{0} articles will be downloaded.'.format(len(article_ids) - len(intersection)))
+    #print('{0} articles are already stored in the database.'.format(len(intersection)))
+    #print('{0} articles will be downloaded.'.format(len(article_ids) - len(intersection)))
     
+    session = sessions_dict[db]
     for i in tqdm.tqdm(range(len(article_ids))):
-        download_query_response(article_ids[i], db, refresh)
+        download_article(article_ids[i], db, session, refresh, cache)
     
-    files_count = len(os.listdir(db))
-    print('Total {0} articles stored in the database.'.format(files_count))
+    #files_count = len(os.listdir(db))
+    #print('Total {0} articles stored in the database.'.format(files_count))
     return article_ids
