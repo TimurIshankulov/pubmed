@@ -59,3 +59,47 @@ def add_pmc_id(items):
             if 'linksetdbs' in data['linksets'][0]:
                 items.loc[i, 'pmc_id'] = data['linksets'][0]['linksetdbs'][0]['links'][0]
     return items
+
+
+def download_query_response(article_id, db, refresh=False):
+    """Saves article query response with <article_id> identifier to file"""
+    params = {
+        'db'      : db,
+        'id'      : article_id,
+        'api_key' : api_key,
+        'retmode' : retmode
+    }
+    
+    filename = os.path.join(db, str(article_id))
+    if (os.path.exists(filename)) and (not refresh):
+        pass
+    else:
+        try:
+            response = requests.get(url=url_fetch, headers=headers, params=params)
+        except requests.RequestException:
+            print('Problem has occured with {0} ID: {1}'.format(db, article_id))
+        else:
+            data = response.text
+            with open(filename, 'w+', encoding='utf-8') as f:
+                f.write(data)
+
+
+def handle_query_responses(db, article_ids):
+    """Returns articles DataFrame generated from files"""
+    items_list = []
+    filenames = [os.path.join(db, str(article_id)) for article_id in article_ids]
+    items = pd.DataFrame(columns=columns[db])
+    
+    for i in tqdm.tqdm(range(len(filenames))):
+        root = get_element_tree(filenames[i])
+        if db == 'pmc':
+            item = parse_element_tree_pmc(root)
+        elif db == 'pubmed':
+            item = parse_element_tree_pubmed(root)
+        item['file_size'] = os.path.getsize(filenames[i])
+        items_list.append(item)
+        if i % 5000 == 0:
+            items.to_csv('database/tmp.csv', sep='|', index=False)
+
+    items = items.append(items_list)
+    return items

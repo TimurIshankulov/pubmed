@@ -537,27 +537,6 @@ def get_parsed_item(data, db):
     return item
 
 
-def handle_query_responses(db, article_ids):
-    """Returns articles DataFrame generated from files"""
-    items_list = []
-    filenames = [os.path.join(db, str(article_id)) for article_id in article_ids]
-    items = pd.DataFrame(columns=columns[db])
-    
-    for i in tqdm.tqdm(range(len(filenames))):
-        root = get_element_tree(filenames[i])
-        if db == 'pmc':
-            item = parse_element_tree_pmc(root)
-        elif db == 'pubmed':
-            item = parse_element_tree_pubmed(root)
-        item['file_size'] = os.path.getsize(filenames[i])
-        items_list.append(item)
-        if i % 5000 == 0:
-            items.to_csv('database/tmp.csv', sep='|', index=False)
-
-    items = items.append(items_list)
-    return items
-
-
 def generate_dataset(db, article_ids):
     """Returns articles DataFrame generated from MySQL database"""
     items_list = []
@@ -622,31 +601,11 @@ def save_to_database(item, session):
         session.close()
 
 
-def download_query_response(article_id, db, refresh=False):
-    """Saves article query response with <article_id> identifier to file"""
-    params = {
-        'db'      : db,
-        'id'      : article_id,
-        'api_key' : api_key,
-        'retmode' : retmode
-    }
-    
-    filename = os.path.join(db, str(article_id))
-    if (os.path.exists(filename)) and (not refresh):
-        pass
-    else:
-        try:
-            response = requests.get(url=url_fetch, headers=headers, params=params)
-        except requests.RequestException:
-            print('Problem has occured with {0} ID: {1}'.format(db, article_id))
-        else:
-            data = response.text
-            with open(filename, 'w+', encoding='utf-8') as f:
-                f.write(data)
-
-
 def download_article(article_id, db, session, refresh=False, cache=False):
-    """Saves article query response with <article_id> identifier to file"""
+    """Downloads article query response with <article_id> identifier.
+    Does nothing if article is already in the MySQL database.
+    If cache flag set to True then downloaded data will be saved to file too.
+    """
     params = {
         'db'      : db,
         'id'      : article_id,
@@ -658,11 +617,9 @@ def download_article(article_id, db, session, refresh=False, cache=False):
     if (result is None) or (refresh):  # If not present in the database
         filename = os.path.join(db, str(article_id))
         if (os.path.exists(filename)) and (not refresh):  # If file exists, then read it first
-            # print('Getting from file: {0}'.format(article_id))
             with open(filename, 'r', encoding='utf-8') as f:
                 data = f.read() 
         else:                                             # Else send request to pubmed
-            # print('Downloading from Pubmed: {0}'.format(article_id))
             try:
                 response = requests.get(url=url_fetch, headers=headers, params=params)
             except requests.RequestException:
@@ -682,8 +639,6 @@ def download_all_articles(query, db, refresh=False, cache=False):
     """Downloads all query responses got by <query>"""
     article_ids = get_article_ids(query, db)
     
-    article_ids = [str(article_id) for article_id in article_ids]
-    #files_list = os.listdir(db)
     #intersection = list(set(article_ids) & set(files_list))
     
     print('{0} articles found in {1} with query specified.'.format(len(article_ids), db))
