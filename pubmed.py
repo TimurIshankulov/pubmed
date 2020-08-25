@@ -603,7 +603,7 @@ def save_to_database(item, session):
 
 def download_article(article_id, db, session, refresh=False, cache=False):
     """Downloads article query response with <article_id> identifier.
-    Does nothing if article is already in the MySQL database.
+    Does nothing if an article is already in the MySQL database.
     If cache flag set to True then downloaded data will be saved to file too.
     """
     params = {
@@ -639,16 +639,21 @@ def download_all_articles(query, db, refresh=False, cache=False):
     """Downloads all query responses got by <query>"""
     article_ids = get_article_ids(query, db)
     
-    #intersection = list(set(article_ids) & set(files_list))
-    
-    print('{0} articles found in {1} with query specified.'.format(len(article_ids), db))
-    #print('{0} articles are already stored in the database.'.format(len(intersection)))
-    #print('{0} articles will be downloaded.'.format(len(article_ids) - len(intersection)))
-    
     session = sessions[db]
+    article_ids_db = session.query(PubmedArticle.pmid).all()
+    article_ids_db = [id[0] for id in article_ids_db]
+    session.close()
+
+    intersection = list(set(article_ids) & set(article_ids_db))
+    to_download = len(article_ids) - len(intersection)
+    print('{0} articles found in {1} with query specified.'.format(len(article_ids), db))
+    print('{0} articles are already stored in the database.'.format(len(intersection)))
+    print('{0} articles will be downloaded from {1}.'.format(to_download, db))
+    
     for i in tqdm.tqdm(range(len(article_ids))):
         download_article(article_ids[i], db, session, refresh, cache)
     
-    #files_count = len(os.listdir(db))
-    #print('Total {0} articles stored in the database.'.format(files_count))
+    article_ids_db = session.query(PubmedArticle.pmid).all()
+    session.close()
+    print('Total {0} articles stored in the database.'.format(len(article_ids_db)))
     return article_ids
