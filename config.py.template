@@ -7,5 +7,6 @@ db_password    = 'admin'
 db_name_pubmed = 'pubmed'
 db_name_pmc    = 'pmc'
 server_name    = 'localhost'
-conn_string_pubmed = 'mysql://{0}:{1}@{2}/{3}?charset=utf8'.format(db_login, db_password, server_name, db_name_pubmed)
-conn_string_pmc    = 'mysql://{0}:{1}@{2}/{3}?charset=utf8'.format(db_login, db_password, server_name, db_name_pmc)
+charset        = 'utf8mb4'
+conn_string_pubmed = 'mysql://{0}:{1}@{2}/{3}?charset={4}'.format(db_login, db_password, server_name, db_name_pubmed, charset)
+conn_string_pmc    = 'mysql://{0}:{1}@{2}/{3}?charset={4}'.format(db_login, db_password, server_name, db_name_pmc, charset)
