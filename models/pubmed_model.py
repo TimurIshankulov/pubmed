@@ -116,7 +116,7 @@ class PubmedArticle(BasePubmed):
     publisher_nlm_id   = Column(String(30))
     publisher_issn_linking = Column(String(30))
     abstract_len       = Column(Integer())
-    abstract           = Column(Text())
+    abstract           = Column(MEDIUMTEXT())
     copyright          = Column(Text())
     mesh_quals_major   = Column(Text())
     mesh_quals_minor   = Column(Text())
