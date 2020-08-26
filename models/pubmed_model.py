@@ -1,5 +1,6 @@
 import os, sys, inspect
 from sqlalchemy import Column, ForeignKey, Integer, String, Text
+from sqlalchemy.dialects.mysql import MEDIUMTEXT
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship
 from sqlalchemy import create_engine
@@ -99,7 +100,7 @@ class PubmedArticle(BasePubmed):
     language           = Column(String(20))
     title              = Column(Text())
     authors            = Column(Text())
-    affiliations       = Column(Text())
+    affiliations       = Column(MEDIUMTEXT())
     article_type       = Column(String(30))
     publication_type   = Column(Text())
     journal_title      = Column(Text())
