@@ -41,11 +41,15 @@ columns = {'pubmed': ['pmid', 'pmc', 'pii', 'mid', 'doi', 'elocation_id', 'langu
                       'publisher_name', 'publisher_location', 'publisher_nlm_id', 'publisher_issn_linking',
                       'abstract_len', 'abstract', 'copyright',
                       'mesh_quals_major', 'mesh_quals_minor', 'mesh_descriptors', 'keywords'],
-           'pmc': ['pmid', 'pmc', 'publisher-id', 'doi', 'abstract_len', 'full_text_len',
-                   'title', 'article-type', 'category', 'authors', 'affiliations', 'pub_date',
-                   'volume', 'elocation-id', 'issue', 'pages', 'issn_epub', 'issn_ppub',
-                   'journal-id_nlm-ta', 'journal_title', 'publisher_name', 'publisher_loc',
-                   'copyright', 'license-type', 'license', 'abstract', 'full_text', 'keywords']
+           'pmc': ['pmid', 'pmc', 'pii', 'doi', 'art-access-id', 'sici', 'pmc-scan', 'medline', 'manuscript', 'other',
+                   'title', 'authors', 'affiliations', 'article-type', 'category',
+                   'journal_title', 'volume', 'issue', 'pages', 'pub_date', 'issn_epub', 'issn_ppub',
+                   'publisher_name', 'publisher_loc', 'publisher-id', 'elocation-id', 'publisher-manuscript',
+                   'journal-id_nlm-ta', 'journal-id_pubmed-jr-id', 'journal-id_issn', 'journal-id_pmc',
+                   'journal-id_doi', 'journal-id_coden', 'journal-id_publisher-id', 'journal-id_hwp',
+                   'journal-id_nlm-journal-id', 'journal-id_iso-abbrev',
+                   'abstract_len', 'abstract', 'full_text_len', 'full_text',
+                   'license-type', 'license', 'copyright', 'keywords']
 }
 
 engine_pubmed = create_engine(conn_string_pubmed)
