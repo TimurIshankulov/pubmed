@@ -12,7 +12,8 @@ import requests
 from IPython.display import clear_output
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
-from tqdm import notebook as tqdm
+#from tqdm import notebook as tqdm
+import tqdm.auto as tqdm
 
 from config import api_key, max_results, retmode
 from config import conn_string_pubmed
