@@ -89,7 +89,7 @@ class PubmedArticle(BasePubmed):
 
     #====== Table options ======#
 
-    __tablename__ = 'articles'
+    __tablename__ = 'pubmed'
 
     pmid               = Column(Integer(), primary_key=True, nullable=False)
     pmc                = Column(String(50))
