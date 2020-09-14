@@ -9,7 +9,7 @@ from alembic import context
 current_dir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
 parent_dir = os.path.dirname(current_dir)
 sys.path.append(parent_dir)
-from config import conn_string_pubmed
+from config import conn_string
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
@@ -23,8 +23,8 @@ fileConfig(config.config_file_name)
 # for 'autogenerate' support
 # from myapp import mymodel
 # target_metadata = mymodel.Base.metadata
-from models.pubmed_model import BasePubmed
-target_metadata = BasePubmed.metadata
+from models.pubmed_model import Base
+target_metadata = Base.metadata
 
 # other values from the config, defined by the needs of env.py,
 # can be acquired:
@@ -48,7 +48,7 @@ def run_migrations_offline():
 
     """
     #url = config.get_main_option("sqlalchemy.url")
-    url = conn_string_pubmed
+    url = conn_string
     context.configure(
         url=url,
         target_metadata=target_metadata,
@@ -71,7 +71,7 @@ def run_migrations_online():
         config.get_section(config.config_ini_section),
         prefix="sqlalchemy.",
         poolclass=pool.NullPool,
-        url=conn_string_pubmed,
+        url=conn_string,
     )
 
     with connectable.connect() as connection:
