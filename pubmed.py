@@ -12,12 +12,13 @@ import requests
 from IPython.display import clear_output
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
-#from tqdm import notebook as tqdm
 import tqdm.auto as tqdm
 
 from config import api_key, max_results, retmode
 from config import conn_string
 from models.pubmed_model import Base, PubmedArticle, PMCArticle
+
+article_types = {'pubmed': PubmedArticle, 'pmc': PMCArticle}
 
 headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) ' + \
                          'Chrome/84.0.4147.105 Safari/537.36'
@@ -57,8 +58,6 @@ engine_pubmed = create_engine(conn_string)
 Base.metadata.bind = engine_pubmed
 DBSession_pubmed = sessionmaker(bind=engine_pubmed)
 session = DBSession_pubmed()
-
-#sessions = {'pubmed': session_pubmed}
 
 def parse_pub_date(subroot, pub_type):
     """Returns parsed publication date from given ET <subroot>"""
@@ -546,9 +545,10 @@ def generate_dataset(db, article_ids):
     """Returns articles DataFrame generated from MySQL database"""
     items_list = []
     items = pd.DataFrame(columns=columns[db])
+    article_type = article_types[db]
 
     for i in tqdm.tqdm(range(len(article_ids))):
-        result = session.query(PubmedArticle).filter_by(pmid=article_ids[i]).first()
+        result = session.query(article_type).filter_by(pmid=article_ids[i]).first()
         if result is not None:
             items_list.append(result.to_dict())
         else:
@@ -589,11 +589,12 @@ def get_article_ids(query, db):
     return article_ids
 
 
-def save_to_database(item):
+def save_to_database(item, db):
     """Sends MySQL query and saves <item> to database"""
+    article_type = article_types[db]
     try:
-        article = PubmedArticle(item)
-        session.add(article) 
+        article = article_type(item)
+        session.add(article)
         session.commit()
     except MySQLdb._exceptions.IntegrityError:
         print('Integrity error, article id: {0}. Error info:\n'.format(article.pmid), sys.exc_info()[1])
@@ -617,7 +618,9 @@ def download_article(article_id, db, refresh=False, cache=False):
         'retmode' : retmode
     }
 
-    result = session.query(PubmedArticle).filter_by(pmid=article_id).first()
+    article_type = article_types[db]
+    result = session.query(article_type).filter_by(pmid=article_id).first()
+
     if (result is None) or (refresh):  # If not present in the database
         filename = os.path.join(db, str(article_id))
         if (os.path.exists(filename)) and (not refresh):  # If file exists, then read it first
@@ -634,7 +637,7 @@ def download_article(article_id, db, refresh=False, cache=False):
                 with open(filename, 'w+', encoding='utf-8') as f:
                     f.write(data)
         item = get_parsed_item(data, db)
-        save_to_database(item)
+        save_to_database(item, db)
     else:  # Article is already in the database
         pass
 
@@ -642,8 +645,8 @@ def download_article(article_id, db, refresh=False, cache=False):
 def download_all_articles(query, db, refresh=False, cache=False):
     """Downloads all query responses got by <query>"""
     article_ids = get_article_ids(query, db)
-    
-    article_ids_db = session.query(PubmedArticle.pmid).all()
+    article_type = article_types[db]
+    article_ids_db = session.query(article_type.pmid).all()
     article_ids_db = [id[0] for id in article_ids_db]
     session.close()
 
@@ -656,7 +659,7 @@ def download_all_articles(query, db, refresh=False, cache=False):
     for i in tqdm.tqdm(range(len(article_ids))):
         download_article(article_ids[i], db, refresh, cache)
     
-    article_ids_db = session.query(PubmedArticle.pmid).all()
+    article_ids_db = session.query(article_type.pmid).all()
     session.close()
     print('Total {0} articles stored in the database.'.format(len(article_ids_db)))
     return article_ids
