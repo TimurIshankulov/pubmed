@@ -16,8 +16,8 @@ from sqlalchemy.orm import sessionmaker
 import tqdm.auto as tqdm
 
 from config import api_key, max_results, retmode
-from config import conn_string_pubmed
-from models.pubmed_model import BasePubmed, PubmedArticle
+from config import conn_string
+from models.pubmed_model import Base, PubmedArticle, PMCArticle
 
 headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) ' + \
                          'Chrome/84.0.4147.105 Safari/537.36'
@@ -53,12 +53,12 @@ columns = {'pubmed': ['pmid', 'pmc', 'pii', 'mid', 'doi', 'elocation_id', 'langu
                    'license-type', 'license', 'copyright', 'keywords']
 }
 
-engine_pubmed = create_engine(conn_string_pubmed)
-BasePubmed.metadata.bind = engine_pubmed
+engine_pubmed = create_engine(conn_string)
+Base.metadata.bind = engine_pubmed
 DBSession_pubmed = sessionmaker(bind=engine_pubmed)
-session_pubmed = DBSession_pubmed()
+session = DBSession_pubmed()
 
-sessions = {'pubmed': session_pubmed}
+#sessions = {'pubmed': session_pubmed}
 
 def parse_pub_date(subroot, pub_type):
     """Returns parsed publication date from given ET <subroot>"""
@@ -546,7 +546,6 @@ def generate_dataset(db, article_ids):
     """Returns articles DataFrame generated from MySQL database"""
     items_list = []
     items = pd.DataFrame(columns=columns[db])
-    session = sessions[db]
 
     for i in tqdm.tqdm(range(len(article_ids))):
         result = session.query(PubmedArticle).filter_by(pmid=article_ids[i]).first()
@@ -590,7 +589,7 @@ def get_article_ids(query, db):
     return article_ids
 
 
-def save_to_database(item, session):
+def save_to_database(item):
     """Sends MySQL query and saves <item> to database"""
     try:
         article = PubmedArticle(item)
@@ -606,7 +605,7 @@ def save_to_database(item, session):
         session.close()
 
 
-def download_article(article_id, db, session, refresh=False, cache=False):
+def download_article(article_id, db, refresh=False, cache=False):
     """Downloads article query response with <article_id> identifier.
     Does nothing if an article is already in the MySQL database.
     If cache flag set to True then downloaded data will be saved to file too.
@@ -635,7 +634,7 @@ def download_article(article_id, db, session, refresh=False, cache=False):
                 with open(filename, 'w+', encoding='utf-8') as f:
                     f.write(data)
         item = get_parsed_item(data, db)
-        save_to_database(item, session)
+        save_to_database(item)
     else:  # Article is already in the database
         pass
 
@@ -644,7 +643,6 @@ def download_all_articles(query, db, refresh=False, cache=False):
     """Downloads all query responses got by <query>"""
     article_ids = get_article_ids(query, db)
     
-    session = sessions[db]
     article_ids_db = session.query(PubmedArticle.pmid).all()
     article_ids_db = [id[0] for id in article_ids_db]
     session.close()
@@ -656,7 +654,7 @@ def download_all_articles(query, db, refresh=False, cache=False):
     print('{0} articles will be downloaded from {1}.'.format(to_download, db))
     
     for i in tqdm.tqdm(range(len(article_ids))):
-        download_article(article_ids[i], db, session, refresh, cache)
+        download_article(article_ids[i], db, refresh, cache)
     
     article_ids_db = session.query(PubmedArticle.pmid).all()
     session.close()
