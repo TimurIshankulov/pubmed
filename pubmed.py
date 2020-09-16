@@ -614,7 +614,11 @@ def save_to_database(item, db):
         print('Integrity error, article id: {0}. Error info:\n'.format(article.pmid), sys.exc_info()[1])
         session.rollback()
     except Exception:
-        print('MySQL error, article id: {0}. Error info:\n'.format(article.pmid), sys.exc_info()[1])
+        error_message = 'MySQL error, article id: {0}. Error info:\n'
+        if db == 'pubmed':
+            print(error_message.format(article.pmid), sys.exc_info()[1])
+        elif db == 'pmc':
+            print(error_message.format(article.pmc), sys.exc_info()[1])
         session.rollback()
     finally:
         session.close()
@@ -633,8 +637,12 @@ def download_article(article_id, db, refresh=False, cache=False):
     }
 
     db_article_type = db_article_types[db]
-    result = session.query(db_article_type).filter_by(pmid=article_id).first()
-
+    if db == 'pubmed':
+        result = session.query(db_article_type).filter_by(pmid=article_id).first()
+    elif db == 'pmc':
+        result = session.query(db_article_type).filter_by(pmc=article_id).first()
+    else:
+        result = None
     if (result is None) or (refresh):  # If not present in the database
         filename = os.path.join(db, str(article_id))
         if (os.path.exists(filename)) and (not refresh):  # If file exists, then read it first
