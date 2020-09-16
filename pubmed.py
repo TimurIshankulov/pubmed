@@ -18,7 +18,7 @@ from config import api_key, max_results, retmode
 from config import conn_string
 from models.pubmed_model import Base, PubmedArticle, PMCArticle
 
-article_types = {'pubmed': PubmedArticle, 'pmc': PMCArticle}
+db_article_types = {'pubmed': PubmedArticle, 'pmc': PMCArticle}
 
 headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) ' + \
                          'Chrome/84.0.4147.105 Safari/537.36'
@@ -58,6 +58,22 @@ engine_pubmed = create_engine(conn_string)
 Base.metadata.bind = engine_pubmed
 DBSession_pubmed = sessionmaker(bind=engine_pubmed)
 session = DBSession_pubmed()
+
+def parse_top_level_subroots_pmc(root):
+    """Return top-level subroots and item dict with an article-type from given ET <root>"""
+    item = {}
+    item['article-type'] = 'pmc_article (unknown)'
+
+    subroot = root.find('article')
+    if subroot is not None:
+        article_type = subroot.get('article-type')                                                 # Article type
+        if article_type is not None:
+            item['article-type'] = article_type
+            
+    article_meta = root.find('article/front/article-meta')                                         # Article meta
+
+    return item, article_meta
+
 
 def parse_pub_date(subroot, pub_type):
     """Returns parsed publication date from given ET <subroot>"""
@@ -109,7 +125,7 @@ def parse_authors(subroot, path):
                 authors.append(fullname)
     if len(authors) > 0:
         authors = '; '.join(authors)
-        authors = ' '.join(authors.split())
+        authors = ' '.join(authors.split())  # Remove double-spacing in names
     if authors:
         return authors
     return np.NaN
@@ -126,8 +142,9 @@ def parse_affiliations(subroot, path):
                 label = ''
                 for element in affiliation.iter():
                     if (element.tag == 'label') or (element.tag == 'sup'):
-                        label = '(' + element.text + ')'
-                        element.text = ''
+                        if (element is not None) and (element.text is not None):
+                            label = '(' + element.text + ')'
+                            element.text = ''
                 affiliation_string = extract_text(affiliation, '')
                 if label:
                     affiliation_string = label + ' ' + affiliation_string
@@ -235,35 +252,32 @@ def extract_text(subroot, path):
 
 def parse_element_tree_pmc(root):
     """Returns parsed dict with all values found"""
-    item = {}
-    
-    item['article-type'] = root.find('article').get('article-type')                             # Article type
-    article_meta = root.findall('article/front/article-meta')                                   # Article meta
-    for meta in article_meta:
-        article_ids = meta.findall('article-id')                                                # Article ids
-        for article_id in article_ids:
-            item[article_id.get('pub-id-type')] = article_id.text
-            
-        category = meta.find('article-categories/subj-group/subject')                           # Article category
-        if category is not None:
-            item['category'] = category.text
-            
-        item['title'] = extract_text(meta, 'title-group/article-title')                         # Article title
-        item['authors'] = parse_authors(meta, 'contrib-group/contrib')                          # Authors
-        item['affiliations'] = parse_affiliations(meta, 'contrib-group/aff')                    # Affiliations
-        item['pub_date'] = parse_pub_date(meta, 'epub')                                         # Publication date
-    
-        copyright = meta.find('permissions/copyright-statement')                                # Copyright statement
-        if copyright is not None:
-            item['copyright'] = copyright.text
-        license_type = meta.find('permissions/license')                                         # License type
-        if license_type is not None:
-            item['license-type'] = license_type.get('license-type')
-        item['license'] = extract_text(meta, 'permissions/license/license-p')                   # License text
+    item, article_meta = parse_top_level_subroots_pmc(root)
+
+    article_ids = article_meta.findall('article-id')                                               # Article ids
+    for article_id in article_ids:
+        item[article_id.get('pub-id-type')] = article_id.text
         
-        item['keywords'] = parse_keywords(meta)                                                 # Keywords
-        item['abstract'] = extract_text(meta, 'abstract')                                       # Abstract
-        item.update(parse_issue(meta))                                                          # Journal issue
+    category = article_meta.find('article-categories/subj-group/subject')                          # Article category
+    if category is not None:
+        item['category'] = category.text
+        
+    item['title'] = extract_text(article_meta, 'title-group/article-title')                        # Article title
+    item['authors'] = parse_authors(article_meta, 'contrib-group/contrib')                         # Authors
+    item['affiliations'] = parse_affiliations(article_meta, 'contrib-group/aff')                   # Affiliations
+    item['pub_date'] = parse_pub_date(article_meta, 'epub')                                        # Publication date
+
+    copyright = article_meta.find('permissions/copyright-statement')                               # Copyright statement
+    if copyright is not None:
+        item['copyright'] = copyright.text
+    license_type = article_meta.find('permissions/license')                                        # License type
+    if license_type is not None:
+        item['license-type'] = license_type.get('license-type')
+    item['license'] = extract_text(article_meta, 'permissions/license/license-p')                  # License text
+    
+    item['keywords'] = parse_keywords(article_meta)                                                # Keywords
+    item['abstract'] = extract_text(article_meta, 'abstract')                                      # Abstract
+    item.update(parse_issue(article_meta))                                                         # Journal issue
     
     item.update(parse_journal_meta(root, 'article/front/journal-meta'))                         # Journal meta
     item['full_text'] = extract_text(root, 'article/body')
@@ -545,10 +559,10 @@ def generate_dataset(db, article_ids):
     """Returns articles DataFrame generated from MySQL database"""
     items_list = []
     items = pd.DataFrame(columns=columns[db])
-    article_type = article_types[db]
+    db_article_type = db_article_types[db]
 
     for i in tqdm.tqdm(range(len(article_ids))):
-        result = session.query(article_type).filter_by(pmid=article_ids[i]).first()
+        result = session.query(db_article_type).filter_by(pmid=article_ids[i]).first()
         if result is not None:
             items_list.append(result.to_dict())
         else:
@@ -591,9 +605,9 @@ def get_article_ids(query, db):
 
 def save_to_database(item, db):
     """Sends MySQL query and saves <item> to database"""
-    article_type = article_types[db]
+    db_article_type = db_article_types[db]
     try:
-        article = article_type(item)
+        article = db_article_type(item)
         session.add(article)
         session.commit()
     except MySQLdb._exceptions.IntegrityError:
@@ -618,8 +632,8 @@ def download_article(article_id, db, refresh=False, cache=False):
         'retmode' : retmode
     }
 
-    article_type = article_types[db]
-    result = session.query(article_type).filter_by(pmid=article_id).first()
+    db_article_type = db_article_types[db]
+    result = session.query(db_article_type).filter_by(pmid=article_id).first()
 
     if (result is None) or (refresh):  # If not present in the database
         filename = os.path.join(db, str(article_id))
@@ -645,8 +659,8 @@ def download_article(article_id, db, refresh=False, cache=False):
 def download_all_articles(query, db, refresh=False, cache=False):
     """Downloads all query responses got by <query>"""
     article_ids = get_article_ids(query, db)
-    article_type = article_types[db]
-    article_ids_db = session.query(article_type.pmid).all()
+    db_article_type = db_article_types[db]
+    article_ids_db = session.query(db_article_type.pmid).all()
     article_ids_db = [id[0] for id in article_ids_db]
     session.close()
 
@@ -659,7 +673,7 @@ def download_all_articles(query, db, refresh=False, cache=False):
     for i in tqdm.tqdm(range(len(article_ids))):
         download_article(article_ids[i], db, refresh, cache)
     
-    article_ids_db = session.query(article_type.pmid).all()
+    article_ids_db = session.query(db_article_type.pmid).all()
     session.close()
     print('Total {0} articles stored in the database.'.format(len(article_ids_db)))
     return article_ids
