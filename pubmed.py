@@ -77,7 +77,7 @@ def parse_top_level_subroots_pmc(root):
 
 def parse_pub_date(subroot, pub_type):
     """Returns parsed publication date from given ET <subroot>"""
-    pub_date = np.NaN
+    pub_date = None
     pub_dates = subroot.findall('pub-date')
     for pub_record in pub_dates:
         if (pub_record.attrib.get('pub-type', '') == pub_type or
@@ -91,7 +91,7 @@ def parse_pub_date(subroot, pub_type):
                     pub_date += '-' + month.text
                     if day is not None:
                         pub_date += '-' + day.text
-    if pub_date is np.NaN:
+    if pub_date is None:
         pub_date = parse_pub_date(subroot, 'ppub')
     return pub_date
 
@@ -128,7 +128,7 @@ def parse_authors(subroot, path):
         authors = ' '.join(authors.split())  # Remove double-spacing in names
     if authors:
         return authors
-    return np.NaN
+    return ''
 
 
 def parse_affiliations(subroot, path):
@@ -173,7 +173,7 @@ def parse_keywords(subroot):
     if len(keywords) > 0:
         keywords = '; '.join(keywords)
         return keywords
-    return np.NaN
+    return ''
 
 
 def parse_issue(subroot):
@@ -281,8 +281,8 @@ def parse_element_tree_pmc(root):
     
     item.update(parse_journal_meta(root, 'article/front/journal-meta'))                         # Journal meta
     item['full_text'] = extract_text(root, 'article/body')
-    item['abstract_len'] = len(item['abstract']) if item['abstract'] is not np.NaN else 0
-    item['full_text_len'] = len(item['full_text']) if item['full_text'] is not np.NaN else 0
+    item['abstract_len'] = len(item['abstract']) if item['abstract'] is not None else 0
+    item['full_text_len'] = len(item['full_text']) if item['full_text'] is not None else 0
             
     return item
 
@@ -562,7 +562,10 @@ def generate_dataset(db, article_ids):
     db_article_type = db_article_types[db]
 
     for i in tqdm.tqdm(range(len(article_ids))):
-        result = session.query(db_article_type).filter_by(pmid=article_ids[i]).first()
+        if db == 'pubmed':
+            result = session.query(db_article_type).filter_by(pmid=article_ids[i]).first()
+        elif db == 'pmc':
+            result = session.query(db_article_type).filter_by(pmc=article_ids[i]).first()
         if result is not None:
             items_list.append(result.to_dict())
         else:
@@ -668,20 +671,28 @@ def download_all_articles(query, db, refresh=False, cache=False):
     """Downloads all query responses got by <query>"""
     article_ids = get_article_ids(query, db)
     db_article_type = db_article_types[db]
-    article_ids_db = session.query(db_article_type.pmid).all()
+    if db == 'pubmed':
+        article_ids_db = session.query(db_article_type.pmid).all()
+    elif db == 'pmc':
+        article_ids_db = session.query(db_article_type.pmc).all()
     article_ids_db = [id[0] for id in article_ids_db]
     session.close()
 
     intersection = list(set(article_ids) & set(article_ids_db))
     to_download = len(article_ids) - len(intersection)
+    to_download_list = [article_id for article_id in article_ids if article_id not in article_ids_db]
     print('{0} articles found in {1} with query specified.'.format(len(article_ids), db))
     print('{0} articles are already stored in the database.'.format(len(intersection)))
     print('{0} articles will be downloaded from {1}.'.format(to_download, db))
     
-    for i in tqdm.tqdm(range(len(article_ids))):
-        download_article(article_ids[i], db, refresh, cache)
+    if to_download:
+        for i in tqdm.tqdm(range(len(to_download_list))):
+            download_article(to_download_list[i], db, refresh, cache)
     
-    article_ids_db = session.query(db_article_type.pmid).all()
+    if db == 'pubmed':
+        article_ids_db = session.query(db_article_type.pmid).all()
+    elif db == 'pmc':
+        article_ids_db = session.query(db_article_type.pmc).all()
     session.close()
     print('Total {0} articles stored in the database.'.format(len(article_ids_db)))
     return article_ids
