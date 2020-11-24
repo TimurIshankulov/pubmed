@@ -78,28 +78,32 @@ def parse_top_level_subroots_pmc(root):
 def parse_pub_date(subroot, pub_type):
     """Returns parsed publication date from given ET <subroot>"""
     pub_date = None
-    pub_dates = subroot.findall('pub-date')
-    for pub_record in pub_dates:
-        if (pub_record.attrib.get('pub-type', '') == pub_type or
-            pub_record.attrib.get('date-type', '') == 'pub'):
-            day = pub_record.find('day')
-            month = pub_record.find('month')
-            year = pub_record.find('year')
-            if year is not None:
-                pub_date = year.text
-                if month is not None:
-                    pub_date += '-' + month.text
-                    if day is not None:
-                        pub_date += '-' + day.text
-    if pub_date is None:
-        pub_date = parse_pub_date(subroot, 'ppub')
+    if subroot is not None:
+        pub_dates = subroot.findall('pub-date')
+        for pub_record in pub_dates:
+            if (pub_record.attrib.get('pub-type', '') == pub_type or
+                pub_record.attrib.get('date-type', '') == 'pub'):
+                day = pub_record.find('day')
+                month = pub_record.find('month')
+                year = pub_record.find('year')
+                if year is not None:
+                    pub_date = year.text
+                    if month is not None:
+                        pub_date += '-' + month.text
+                        if day is not None:
+                            pub_date += '-' + day.text
+        if pub_date is None:
+            pub_date = parse_pub_date(subroot, 'ppub')
     return pub_date
 
 
 def parse_authors(subroot, path):
     """Returns parsed authors string from given ET <subroot>"""
     authors = []
-    contributors = subroot.findall(path)
+    if subroot is not None:
+        contributors = subroot.findall(path)
+    else:
+        contributors = None
     if contributors is not None:
         for contributor in contributors:
             fullname = ''
@@ -150,22 +154,24 @@ def parse_affiliations(subroot, path):
                     affiliation_string = label + ' ' + affiliation_string
                 affiliation_list.append(affiliation_string)
         return affiliation_list
+    if subroot is not None:
+        affiliations = subroot.findall(path)  # Find affiliations in author's location
+        if not affiliations:
+            affiliations = subroot.findall('aff')  # Find affiliations in meta section
+        affiliation_list = get_affiliation_list(affiliations)
 
-    affiliations = subroot.findall(path)  # Find affiliations in author's location
-    if not affiliations:
-        affiliations = subroot.findall('aff')  # Find affiliations in meta section
-    affiliation_list = get_affiliation_list(affiliations)
-
-    if affiliation_list:
-        affiliations_string = ' // '.join(affiliation_list)
-        return affiliations_string
+        if affiliation_list:
+            affiliations_string = ' // '.join(affiliation_list)
+            return affiliations_string
     return ''
 
 
 def parse_keywords(subroot):
     """Returns parsed keywords string from given ET <subroot>"""
     keywords = []
-    kwds = subroot.find('kwd-group')
+    kwds = None
+    if subroot is not None:
+        kwds = subroot.find('kwd-group')
     if kwds is not None:
         for kwd in kwds.iter('kwd'):
             if kwd is not None and kwd.text is not None:
@@ -179,26 +185,27 @@ def parse_keywords(subroot):
 def parse_issue(subroot):
     """Returns parsed journal issue dict from given ET <subroot>"""
     journal_issue = {}
-    volume = subroot.find('volume')                            # Volume
-    if volume is not None:
-        journal_issue['volume'] = volume.text
+    if subroot is not None:
+        volume = subroot.find('volume')                            # Volume
+        if volume is not None:
+            journal_issue['volume'] = volume.text
+            
+        elocation_id = subroot.find('elocation-id')                # Elocation-id
+        if elocation_id is not None:
+            journal_issue['elocation-id'] = elocation_id.text
+            
+        issue = subroot.find('issue')                              # Issue
+        if issue is not None:
+            journal_issue['issue'] = issue.text
+            
+        fpage = subroot.find('fpage')                              # Pages
+        fpage = fpage.text if fpage is not None else None
+        lpage = subroot.find('lpage')
+        lpage = lpage.text if lpage is not None else None
         
-    elocation_id = subroot.find('elocation-id')                # Elocation-id
-    if elocation_id is not None:
-        journal_issue['elocation-id'] = elocation_id.text
-        
-    issue = subroot.find('issue')                              # Issue
-    if issue is not None:
-        journal_issue['issue'] = issue.text
-        
-    fpage = subroot.find('fpage')                              # Pages
-    fpage = fpage.text if fpage is not None else None
-    lpage = subroot.find('lpage')
-    lpage = lpage.text if lpage is not None else None
-    
-    if isinstance(fpage, str) and isinstance(lpage, str):
-        journal_issue['pages'] = '-'.join([fpage, lpage])
-        
+        if isinstance(fpage, str) and isinstance(lpage, str):
+            journal_issue['pages'] = '-'.join([fpage, lpage])
+            
     return journal_issue
 
 
@@ -234,10 +241,12 @@ def parse_journal_meta(subroot, path):
 def extract_text(subroot, path):
     """Returns extracted text between xml tags"""
     text = ''
+    section = None
     if path == '':
         section = subroot
     else:
-        section = subroot.find(path)
+        if subroot is not None:
+            section = subroot.find(path)
     if section is not None:
         for element in section.iter():
             if element.text:
@@ -253,27 +262,30 @@ def extract_text(subroot, path):
 def parse_element_tree_pmc(root):
     """Returns parsed dict with all values found"""
     item, article_meta = parse_top_level_subroots_pmc(root)
-
-    article_ids = article_meta.findall('article-id')                                               # Article ids
-    for article_id in article_ids:
-        item[article_id.get('pub-id-type')] = article_id.text
-        
-    category = article_meta.find('article-categories/subj-group/subject')                          # Article category
-    if category is not None:
-        item['category'] = category.text
+    if article_meta is not None:
+        article_ids = article_meta.findall('article-id')                                               # Article ids
+        for article_id in article_ids:
+            item[article_id.get('pub-id-type')] = article_id.text
+    
+    if article_meta is not None:
+        category = article_meta.find('article-categories/subj-group/subject')                          # Article category
+        if category is not None:
+            item['category'] = category.text
         
     item['title'] = extract_text(article_meta, 'title-group/article-title')                        # Article title
     item['authors'] = parse_authors(article_meta, 'contrib-group/contrib')                         # Authors
     item['affiliations'] = parse_affiliations(article_meta, 'contrib-group/aff')                   # Affiliations
     item['pub_date'] = parse_pub_date(article_meta, 'epub')                                        # Publication date
-
-    copyright = article_meta.find('permissions/copyright-statement')                               # Copyright statement
-    if copyright is not None:
-        item['copyright'] = copyright.text
-    license_type = article_meta.find('permissions/license')                                        # License type
-    if license_type is not None:
-        item['license-type'] = license_type.get('license-type')
-    item['license'] = extract_text(article_meta, 'permissions/license/license-p')                  # License text
+    
+    if article_meta is not None:
+        copyright = article_meta.find('permissions/copyright-statement')                               # Copyright statement
+        if copyright is not None:
+            item['copyright'] = copyright.text
+    if article_meta is not None:
+        license_type = article_meta.find('permissions/license')                                        # License type
+        if license_type is not None:
+            item['license-type'] = license_type.get('license-type')
+        item['license'] = extract_text(article_meta, 'permissions/license/license-p')                  # License text
     
     item['keywords'] = parse_keywords(article_meta)                                                # Keywords
     item['abstract'] = extract_text(article_meta, 'abstract')                                      # Abstract
