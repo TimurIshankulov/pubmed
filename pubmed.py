@@ -60,7 +60,7 @@ DBSession_pubmed = sessionmaker(bind=engine_pubmed)
 session = DBSession_pubmed()
 
 def parse_top_level_subroots_pmc(root):
-    """Return top-level subroots and item dict with an article-type from given ET <root>"""
+    """Returns top-level subroots and item dict with an article-type from given ET <root>"""
     item = {}
     item['article-type'] = 'pmc_article (unknown)'
 
@@ -73,6 +73,27 @@ def parse_top_level_subroots_pmc(root):
     article_meta = root.find('article/front/article-meta')                                         # Article meta
 
     return item, article_meta
+
+
+def parse_ids_pmc(subroot):
+    """Returns parsed ids from given ET <subroot>"""
+    ids = {}
+    if subroot is not None:
+        article_ids = subroot.findall('article-id')                                                # Article ids
+        for article_id in article_ids:
+            if article_id.text is not None:
+                ids[article_id.get('pub-id-type')] = article_id.text
+    return ids
+
+
+def parse_article_category_pmc(subroot):
+    category = {}
+    """Returns parsed article category from given ET <subroot>"""
+    if subroot is not None:
+        category = subroot.find('article-categories/subj-group/subject')                           # Article category
+        if (category is not None) and (category.text is not None):
+            category['category'] = category.text
+    return category
 
 
 def parse_pub_date(subroot, pub_type):
@@ -262,15 +283,8 @@ def extract_text(subroot, path):
 def parse_element_tree_pmc(root):
     """Returns parsed dict with all values found"""
     item, article_meta = parse_top_level_subroots_pmc(root)
-    if article_meta is not None:
-        article_ids = article_meta.findall('article-id')                                               # Article ids
-        for article_id in article_ids:
-            item[article_id.get('pub-id-type')] = article_id.text
-    
-    if article_meta is not None:
-        category = article_meta.find('article-categories/subj-group/subject')                          # Article category
-        if category is not None:
-            item['category'] = category.text
+    item.update(parse_ids_pmc(article_meta))                                                       # Article ids
+    item.update(parse_article_category_pmc(article_meta))                                          # Article category
         
     item['title'] = extract_text(article_meta, 'title-group/article-title')                        # Article title
     item['authors'] = parse_authors(article_meta, 'contrib-group/contrib')                         # Authors
