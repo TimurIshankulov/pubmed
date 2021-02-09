@@ -87,13 +87,13 @@ def parse_ids_pmc(subroot):
 
 
 def parse_article_category_pmc(subroot):
-    category = {}
+    category_dict = {}
     """Returns parsed article category from given ET <subroot>"""
     if subroot is not None:
         category = subroot.find('article-categories/subj-group/subject')                           # Article category
         if (category is not None) and (category.text is not None):
-            category['category'] = category.text
-    return category
+            category_dict['category'] = category.text
+    return category_dict
 
 
 def parse_pub_date(subroot, pub_type):
@@ -679,6 +679,7 @@ def download_article(article_id, db, refresh=False, cache=False):
         result = session.query(db_article_type).filter_by(pmc=article_id).first()
     else:
         result = None
+
     if (result is None) or (refresh):  # If not present in the database
         filename = os.path.join(db, str(article_id))
         if (os.path.exists(filename)) and (not refresh):  # If file exists, then read it first
