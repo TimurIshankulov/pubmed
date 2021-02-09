@@ -572,13 +572,18 @@ def get_element_tree(filename):
 
 def get_parsed_item(data, db):
     """Returns parsed article dict"""
-    
-    root = ET.fromstring(data)
-    if db == 'pmc':
-        item = parse_element_tree_pmc(root)
-    elif db == 'pubmed':
-        item = parse_element_tree_pubmed(root)
-    return item
+    try:
+        root = ET.fromstring(data)
+    except Exception:
+        item = None
+    else:
+        if db == 'pmc':
+            item = parse_element_tree_pmc(root)
+        elif db == 'pubmed':
+            item = parse_element_tree_pubmed(root)
+    finally:
+        return item
+    return None
 
 
 def generate_dataset(db, article_ids):
@@ -634,6 +639,8 @@ def get_article_ids(query, db):
 
 def save_to_database(item, db):
     """Sends MySQL query and saves <item> to database"""
+    if item is None:
+        return
     db_article_type = db_article_types[db]
     try:
         article = db_article_type(item)
@@ -676,17 +683,18 @@ def download_article(article_id, db, refresh=False, cache=False):
         filename = os.path.join(db, str(article_id))
         if (os.path.exists(filename)) and (not refresh):  # If file exists, then read it first
             with open(filename, 'r', encoding='utf-8') as f:
-                data = f.read() 
+                data = f.read()
         else:                                             # Else send request to pubmed
             try:
                 response = requests.get(url=url_fetch, headers=headers, params=params)
             except requests.RequestException:
                 print('Problem has occured with {0} ID: {1}'.format(db, article_id))
+                data = None
             else:
                 data = response.text
-            if cache:
-                with open(filename, 'w+', encoding='utf-8') as f:
-                    f.write(data)
+                if cache:
+                    with open(filename, 'w+', encoding='utf-8') as f:
+                        f.write(data)
         item = get_parsed_item(data, db)
         save_to_database(item, db)
     else:  # Article is already in the database
